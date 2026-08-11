@@ -1,195 +1,203 @@
 """
-RubPlus Type Definitions and Data Classes
-Version 2.0.0
+Type definitions for RubPlus v2.0.0
 """
 
+from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 
 @dataclass
 class User:
-    """User object"""
+    """User information"""
     id: str
     first_name: str
     last_name: Optional[str] = None
     username: Optional[str] = None
+    avatar: Optional[str] = None
+    bio: Optional[str] = None
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'User':
         return cls(
-            id=data.get('id'),
-            first_name=data.get('first_name'),
-            last_name=data.get('last_name'),
-            username=data.get('username')
+            id=data.get("user_id", ""),
+            first_name=data.get("first_name", ""),
+            last_name=data.get("last_name"),
+            username=data.get("username"),
+            avatar=data.get("avatar"),
+            bio=data.get("bio")
         )
     
+    @property
     def full_name(self) -> str:
-        """Get full name of user"""
-        name = self.first_name or ""
+        """Get full name"""
         if self.last_name:
-            name += f" {self.last_name}"
-        return name.strip()
+            return f"{self.first_name} {self.last_name}"
+        return self.first_name
+    
+    @property
+    def mention(self) -> str:
+        """Get mention string"""
+        if self.username:
+            return f"@{self.username}"
+        return self.full_name
 
 
 @dataclass
 class Chat:
-    """Chat object (private or group)"""
+    """Chat information"""
     id: str
     title: Optional[str] = None
-    is_private: bool = True
     is_group: bool = False
-    members_count: Optional[int] = None
+    members_count: int = 0
+    description: Optional[str] = None
+    avatar: Optional[str] = None
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Chat':
+        chat_id = data.get("chat_id", "")
         return cls(
-            id=data.get('id'),
-            title=data.get('title'),
-            is_private=data.get('id', '').startswith('b0'),
-            is_group=data.get('id', '').startswith('g0'),
-            members_count=data.get('members_count')
-        )
-    
-    def is_pm(self) -> bool:
-        """Check if chat is private message"""
-        return self.is_private
-
-
-@dataclass
-class File:
-    """File attachment"""
-    file_id: str
-    file_name: str
-    file_size: int
-    mime_type: Optional[str] = None
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'File':
-        return cls(
-            file_id=data.get('file_id'),
-            file_name=data.get('file_name'),
-            file_size=data.get('file_size'),
-            mime_type=data.get('mime_type')
+            id=chat_id,
+            title=data.get("title"),
+            is_group=chat_id.startswith("g0"),
+            members_count=data.get("members_count", 0),
+            description=data.get("description"),
+            avatar=data.get("avatar")
         )
 
 
 @dataclass
 class Message:
-    """Message object with rich context"""
+    """Message object"""
     message_id: str
-    chat: Chat
-    sender: User
+    chat_id: str
     text: Optional[str] = None
-    timestamp: int = field(default_factory=lambda: int(datetime.now().timestamp()))
-    file: Optional[File] = None
-    is_photo: bool = False
-    is_video: bool = False
-    is_audio: bool = False
-    is_document: bool = False
+    sender: Optional[User] = None
     reply_to_message_id: Optional[str] = None
+    is_edited: bool = False
+    created_at: Optional[datetime] = None
     raw_data: Dict[str, Any] = field(default_factory=dict)
-    
-    # Callbacks for reply and other operations
-    _reply_func: Optional[Any] = field(default=None, repr=False)
-    _bot: Optional[Any] = field(default=None, repr=False)
+    bot: Optional[Any] = None
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any], bot=None) -> 'Message':
-        """Create Message from raw API data"""
-        chat = Chat.from_dict({'id': data.get('chat_id')})
-        sender = User.from_dict(data.get('sender', {}))
-        file_data = data.get('file')
-        file = File.from_dict(file_data) if file_data else None
-        
-        msg = cls(
-            message_id=data.get('message_id'),
-            chat=chat,
-            sender=sender,
-            text=data.get('text'),
-            timestamp=int(data.get('time', 0)),
-            file=file,
-            is_photo=data.get('photo', False),
-            is_video=data.get('video', False),
-            is_audio=data.get('audio', False),
-            is_document=data.get('document', False),
-            reply_to_message_id=data.get('reply_to_message_id'),
+        sender_data = data.get("from", {})
+        return cls(
+            message_id=data.get("message_id", ""),
+            chat_id=data.get("chat_id", ""),
+            text=data.get("text"),
+            sender=User.from_dict(sender_data) if sender_data else None,
+            reply_to_message_id=data.get("reply_to_message_id"),
+            is_edited=data.get("is_edited", False),
+            created_at=datetime.fromtimestamp(data.get("date", 0)) if data.get("date") else None,
             raw_data=data,
-            _bot=bot
-        )
-        return msg
-    
-    async def reply(self, text: str, parse_mode: Optional[str] = None, keyboard=None, auto_delete: Optional[int] = None):
-        """Reply to this message"""
-        if not self._bot:
-            raise RuntimeError("Bot instance not attached to message")
-        return await self._bot.send(
-            self.chat.id,
-            text,
-            reply_to=self.message_id,
-            parse_mode=parse_mode,
-            keyboard=keyboard,
-            auto_delete=auto_delete
+            bot=bot
         )
     
-    async def edit(self, text: str, parse_mode: Optional[str] = None):
-        """Edit this message"""
-        if not self._bot:
-            raise RuntimeError("Bot instance not attached to message")
-        return await self._bot.edit(self.chat.id, self.message_id, text, parse_mode)
+    async def reply(self, text: str, **kwargs):
+        """Reply to message"""
+        if self.bot:
+            return await self.bot.send(
+                self.chat_id,
+                text,
+                reply_to=self.message_id,
+                **kwargs
+            )
+    
+    async def edit(self, text: str, **kwargs):
+        """Edit message"""
+        if self.bot:
+            return await self.bot.messages.edit(
+                self.chat_id,
+                self.message_id,
+                text,
+                **kwargs
+            )
     
     async def delete(self):
-        """Delete this message"""
-        if not self._bot:
-            raise RuntimeError("Bot instance not attached to message")
-        return await self._bot.delete(self.chat.id, self.message_id)
-    
-    async def forward(self, to_chat_id: str):
-        """Forward this message to another chat"""
-        if not self._bot:
-            raise RuntimeError("Bot instance not attached to message")
-        return await self._bot.forward(self.chat.id, to_chat_id, self.message_id)
+        """Delete message"""
+        if self.bot:
+            return await self.bot.messages.delete(
+                self.chat_id,
+                self.message_id
+            )
 
 
 @dataclass
 class CallbackQuery:
-    """Callback query from inline button"""
+    """Callback query object"""
     callback_id: str
-    message: Message
-    data: str
-    
-    _bot: Optional[Any] = field(default=None, repr=False)
+    user: Optional[User] = None
+    chat_id: Optional[str] = None
+    message_id: Optional[str] = None
+    data: Optional[str] = None
+    raw_data: Dict[str, Any] = field(default_factory=dict)
+    bot: Optional[Any] = None
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any], bot=None) -> 'CallbackQuery':
-        """Create CallbackQuery from raw API data"""
-        message = Message.from_dict(data.get('message', {}), bot)
+        from_data = data.get("from", {})
         return cls(
-            callback_id=data.get('callback_id'),
-            message=message,
-            data=data.get('data'),
-            _bot=bot
+            callback_id=data.get("id", ""),
+            user=User.from_dict(from_data) if from_data else None,
+            chat_id=data.get("chat_id"),
+            message_id=data.get("message_id"),
+            data=data.get("data"),
+            raw_data=data,
+            bot=bot
         )
     
-    async def answer(self, text: str = None, alert: bool = False):
-        """Answer the callback query with a notification"""
-        if not self._bot:
-            raise RuntimeError("Bot instance not attached to callback")
-        # Implementation in methods/callbacks.py
-        pass
-    
-    async def edit_message(self, text: str, parse_mode: Optional[str] = None):
-        """Edit the message associated with this callback"""
-        if not self._bot:
-            raise RuntimeError("Bot instance not attached to callback")
-        return await self.message.edit(text, parse_mode)
+    async def answer(self, text: Optional[str] = None, alert: bool = False):
+        """Answer callback query"""
+        if self.bot:
+            return await self.bot.callbacks.answer(
+                self.callback_id,
+                text=text,
+                alert=alert
+            )
 
 
 @dataclass
 class Update:
-    """Generic update object"""
-    update_id: str
-    update_type: str  # NewMessage, EditedMessage, CallbackQuery, etc.
-    data: Dict[str, Any]
-    timestamp: int = field(default_factory=lambda: int(datetime.now().timestamp()))
+    """Update wrapper"""
+    update_id: int
+    message: Optional[Message] = None
+    callback_query: Optional[CallbackQuery] = None
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any], bot=None) -> 'Update':
+        return cls(
+            update_id=data.get("update_id", 0),
+            message=Message.from_dict(data["message"], bot=bot) if "message" in data else None,
+            callback_query=CallbackQuery.from_dict(data["callback_query"], bot=bot) if "callback_query" in data else None
+        )
+
+
+class UserState:
+    """User state storage wrapper"""
+    
+    def __init__(self, user_id: str, storage):
+        self.user_id = user_id
+        self.storage = storage
+    
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None):
+        """Set user state"""
+        full_key = f"user:{self.user_id}:{key}"
+        return await self.storage.set(full_key, value, ttl)
+    
+    async def get(self, key: str) -> Optional[Any]:
+        """Get user state"""
+        full_key = f"user:{self.user_id}:{key}"
+        return await self.storage.get(full_key)
+    
+    async def delete(self, key: str):
+        """Delete user state"""
+        full_key = f"user:{self.user_id}:{key}"
+        return await self.storage.delete(full_key)
+    
+    async def clear(self):
+        """Clear all user state"""
+        pattern = f"user:{self.user_id}:*"
+        states = await self.storage.get_all(pattern)
+        for key in states.keys():
+            await self.storage.delete(key)
