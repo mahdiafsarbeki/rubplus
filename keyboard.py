@@ -1,12 +1,12 @@
 """
-Keyboard Types for RubPlus
+Enhanced Keyboard builders for RubPlus v2.0.0
 """
 
 from typing import List, Dict, Any
 
 
 class InlineButton:
-    """دکمه شیشه‌ای"""
+    """Inline button (glass-like button)"""
     
     def __init__(self, text: str, callback_data: str):
         self.text = text
@@ -20,14 +20,44 @@ class InlineButton:
         }
 
 
+class URLButton:
+    """URL button"""
+    
+    def __init__(self, text: str, url: str):
+        self.text = text
+        self.url = url
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "button_text": self.text,
+            "type": "Link",
+            "link_url": self.url
+        }
+
+
 class InlineKeyboard:
-    """کیبورد شیشه‌ای (زیر پیام)"""
+    """Inline keyboard (buttons under message)"""
     
     def __init__(self):
-        self._rows: List[List[InlineButton]] = []
+        self._rows: List[List[Any]] = []
     
-    def row(self, *buttons: InlineButton) -> 'InlineKeyboard':
+    def row(self, *buttons) -> 'InlineKeyboard':
+        """Add row of buttons"""
         self._rows.append(list(buttons))
+        return self
+    
+    def button(self, text: str, callback_data: str) -> 'InlineKeyboard':
+        """Add single button"""
+        if not self._rows:
+            self._rows.append([])
+        self._rows[-1].append(InlineButton(text, callback_data))
+        return self
+    
+    def url_button(self, text: str, url: str) -> 'InlineKeyboard':
+        """Add URL button"""
+        if not self._rows:
+            self._rows.append([])
+        self._rows[-1].append(URLButton(text, url))
         return self
     
     def to_dict(self) -> Dict[str, Any]:
@@ -39,8 +69,22 @@ class InlineKeyboard:
         }
 
 
+class ReplyButton:
+    """Reply keyboard button"""
+    
+    def __init__(self, text: str):
+        self.text = text
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "button_text": self.text,
+            "type": "Simple",
+            "id": self.text
+        }
+
+
 class ReplyKeyboard:
-    """کیبورد معمولی (پایین صفحه)"""
+    """Reply keyboard (buttons at bottom of screen)"""
     
     def __init__(self, resize: bool = True, one_time: bool = False):
         self._rows: List[List[str]] = []
@@ -48,7 +92,15 @@ class ReplyKeyboard:
         self.one_time_keyboard = one_time
     
     def row(self, *buttons: str) -> 'ReplyKeyboard':
+        """Add row of buttons"""
         self._rows.append(list(buttons))
+        return self
+    
+    def button(self, text: str) -> 'ReplyKeyboard':
+        """Add single button"""
+        if not self._rows:
+            self._rows.append([])
+        self._rows[-1].append(text)
         return self
     
     def to_dict(self) -> Dict[str, Any]:
@@ -68,7 +120,14 @@ class ReplyKeyboard:
 
 
 class ForceReply:
-    """اجبار به ریپلای کردن"""
+    """Force reply"""
     
     def to_dict(self) -> Dict[str, Any]:
         return {"force_reply": True}
+
+
+class RemoveKeyboard:
+    """Remove keyboard"""
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {"remove_keyboard": True}
