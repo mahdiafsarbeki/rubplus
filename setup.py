@@ -1,15 +1,14 @@
-from setuptools import find_packages, setup
+from setuptools import setup
 
 setup(
     name="rubplus",
     version="1.5.2",
     author="RubPlus Team",
     description="Asynchronous Rubika Bot API wrapper",
-    packages=find_packages(),
+    packages=["rubplus"],
+    package_dir={"rubplus": "."},
     include_package_data=True,
-    install_requires=[
-        "httpx>=0.27.0",
-    ],
+    install_requires=["httpx>=0.27.0"],
     extras_require={
         "webhook": ["fastapi>=0.100.0", "uvicorn[standard]>=0.23.0"],
         "html": ["markdownify>=0.11.0"],
