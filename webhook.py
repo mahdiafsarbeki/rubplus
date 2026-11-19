@@ -28,8 +28,8 @@ class RubPlusWebhook:
             raise ImportError(
                 'Webhook support requires FastAPI. Install it with: pip install "rubplus[webhook]"'
             ) from _FASTAPI_IMPORT_ERROR
-        if not hasattr(bot, "send") or not hasattr(bot, "_handlers"):
-            raise TypeError("bot must be a RubPlus instance or provide send() and _handlers")
+        if not callable(getattr(bot, "_dispatch_update", None)):
+            raise TypeError("bot must be a RubPlus instance with update dispatch support")
         self.bot = bot
         self.secret_token = secret_token
         self.secret_header = secret_header
@@ -57,31 +57,10 @@ class RubPlusWebhook:
             return {"status": "ok", "service": "RubPlus Webhook"}
 
     async def _process_update(self, update: Dict[str, Any]) -> None:
-        update_type = update.get("type")
-        if update_type == "NewMessage":
-            message = update.get("new_message")
-            if not isinstance(message, dict):
-                return
-            message = dict(message)
-            chat_id = update.get("chat_id")
-            message["chat_id"] = chat_id
-
-            async def reply_func(text: str, rid=message.get("message_id"), cid=chat_id):
-                return await self.bot.send(cid, text, reply_to=rid)
-
-            message["reply"] = reply_func
-            handler = self.bot._handlers.get("message")
-            if handler is not None:
-                await handler(message)
-
-        elif update_type == "UpdatedMessage":
-            message = update.get("updated_message")
-            if isinstance(message, dict):
-                message = dict(message)
-                message["chat_id"] = update.get("chat_id")
-                handler = self.bot._handlers.get("edited_message")
-                if handler is not None:
-                    await handler(message)
+        """Use the same update dispatcher as long polling."""
+        if not isinstance(update, dict):
+            raise ValueError("Update must be a JSON object")
+        await self.bot._dispatch_update(update)
 
     def run(self, host: str = "127.0.0.1", port: int = 8000) -> None:
         try:
